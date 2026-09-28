@@ -1,0 +1,52 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste your API key.** The `-DryRun` output below masks it for you.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you ran, what you expected, what you got.
+    validations:
+      required: true
+  - type: textarea
+    id: dryrun
+    attributes:
+      label: Output of `.\Start-ClaudeWithMiMo.ps1 -DryRun`
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Full error message (if any)
+      render: text
+  - type: input
+    id: ps
+    attributes:
+      label: PowerShell version
+      description: "`$PSVersionTable.PSVersion`"
+      placeholder: "5.1.22621 / 7.4.5"
+    validations:
+      required: true
+  - type: input
+    id: claude
+    attributes:
+      label: Claude Code version
+      description: "`claude --version`"
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options: [Windows 11, Windows 10, macOS, Linux, Other]
+    validations:
+      required: true
+  - type: dropdown
+    id: plan
+    attributes:
+      label: MiMo plan
+      options: [Token Plan (tp-), Pay-as-you-go (sk-), Not sure]
