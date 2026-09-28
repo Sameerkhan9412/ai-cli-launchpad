@@ -1,0 +1,8 @@
+title = "ai-cli-launchpad gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fake placeholder keys used by the Pester tests"
+regexes = ['''^(tp-|sk-)?0123456789abcdef$''']
