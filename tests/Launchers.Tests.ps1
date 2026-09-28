@@ -15,6 +15,9 @@ BeforeAll {
         [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
     }
 
+    $fakeTokenPlanKey = 'tp-0123456789abcdef'
+    $fakePaygKey = 'sk-0123456789abcdef'
+
     $saved = @{}
     foreach ($k in 'MIMO_TOKEN_PLAN_API_KEY', 'MIMO_API_KEY', 'CLAUDE_CONFIG_DIR') {
         $saved[$k] = [Environment]::GetEnvironmentVariable($k)
@@ -35,7 +38,7 @@ Describe 'Start-ClaudeWithMiMo.ps1 -DryRun' {
     }
 
     It 'resolves a Token Plan key to the Singapore endpoint and the default model' {
-        $env:MIMO_TOKEN_PLAN_API_KEY = 'tp-0123456789abcdef'
+        $env:MIMO_TOKEN_PLAN_API_KEY = $fakeTokenPlanKey
         $r = Invoke-Launcher $launcher @{ DryRun = $true }
         $r.ExitCode | Should -Be 0
         $r.Output | Should -Match 'token-plan-sgp\.xiaomimimo\.com/anthropic'
@@ -44,7 +47,7 @@ Describe 'Start-ClaudeWithMiMo.ps1 -DryRun' {
     }
 
     It 'never prints the full key' {
-        $env:MIMO_TOKEN_PLAN_API_KEY = 'tp-0123456789abcdef'
+        $env:MIMO_TOKEN_PLAN_API_KEY = $fakeTokenPlanKey
         (Invoke-Launcher $launcher @{ DryRun = $true }).Output | Should -Not -Match '0123456789abcdef'
     }
 
@@ -56,12 +59,12 @@ Describe 'Start-ClaudeWithMiMo.ps1 -DryRun' {
     }
 
     It 'accepts a model alias' {
-        $env:MIMO_TOKEN_PLAN_API_KEY = 'tp-0123456789abcdef'
+        $env:MIMO_TOKEN_PLAN_API_KEY = $fakeTokenPlanKey
         (Invoke-Launcher $launcher @{ DryRun = $true; Model = 'flash' }).Output | Should -Match 'MODEL\s+:\s+mimo-v2\.6-flash'
     }
 
     It 'refuses an sk- key on a Token Plan endpoint' {
-        $env:MIMO_TOKEN_PLAN_API_KEY = 'sk-0123456789abcdef'
+        $env:MIMO_TOKEN_PLAN_API_KEY = $fakePaygKey
         $r = Invoke-Launcher $launcher @{ DryRun = $true; Plan = 'TokenPlanSgp' }
         $r.ExitCode | Should -Be 1
         $r.Output | Should -Match 'ERROR'
@@ -74,14 +77,14 @@ Describe 'Start-ClaudeWithMiMo.ps1 -DryRun' {
     }
 
     It 'passes arguments after -- through to claude instead of binding them to launcher parameters' {
-        $env:MIMO_TOKEN_PLAN_API_KEY = 'tp-0123456789abcdef'
+        $env:MIMO_TOKEN_PLAN_API_KEY = $fakeTokenPlanKey
         $output = & $launcher -DryRun -- --print 'hello world' 6>&1 2>&1 | Out-String
         $LASTEXITCODE | Should -Be 0
         $output | Should -Match 'ARGS\s+:\s+--print hello world'
     }
 
     It 'reports a missing claude without offering to install during a dry run' {
-        $env:MIMO_TOKEN_PLAN_API_KEY = 'tp-0123456789abcdef'
+        $env:MIMO_TOKEN_PLAN_API_KEY = $fakeTokenPlanKey
         $savedPath = $env:PATH
         try {
             $env:PATH = Join-Path $TestDrive 'empty-path'
@@ -94,7 +97,7 @@ Describe 'Start-ClaudeWithMiMo.ps1 -DryRun' {
     }
 
     It 'shows where claude was found' {
-        $env:MIMO_TOKEN_PLAN_API_KEY = 'tp-0123456789abcdef'
+        $env:MIMO_TOKEN_PLAN_API_KEY = $fakeTokenPlanKey
         $bin = Join-Path $TestDrive 'fake-bin'
         New-Item -ItemType Directory -Path $bin -Force | Out-Null
         $fake = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'claude.cmd' } else { 'claude' }
@@ -110,7 +113,7 @@ Describe 'Start-ClaudeWithMiMo.ps1 -DryRun' {
     }
 
     It 'does not create preferences.json' {
-        $env:MIMO_TOKEN_PLAN_API_KEY = 'tp-0123456789abcdef'
+        $env:MIMO_TOKEN_PLAN_API_KEY = $fakeTokenPlanKey
         Invoke-Launcher $launcher @{ DryRun = $true } | Out-Null
         Test-Path (Join-Path $dir 'preferences.json') | Should -BeFalse
     }
@@ -128,7 +131,7 @@ Describe 'Configure-ClaudeWithMiMo.ps1' {
     }
 
     It 'writes settings.json, the onboarding flag and .env' {
-        $r = Invoke-Launcher $configure @{ ApiKey = 'tp-0123456789abcdef'; Model = 'pro'; SkipClaudeInstall = $true }
+        $r = Invoke-Launcher $configure @{ ApiKey = $fakeTokenPlanKey; Model = 'pro'; SkipClaudeInstall = $true }
 
         $settings = Get-Content (Join-Path $env:CLAUDE_CONFIG_DIR 'settings.json') -Raw | ConvertFrom-Json
         $settings.env.ANTHROPIC_BASE_URL | Should -Be 'https://token-plan-sgp.xiaomimimo.com/anthropic'
@@ -147,7 +150,7 @@ Describe 'Configure-ClaudeWithMiMo.ps1' {
         '{"permissions":{"deny":["Read(.env)"]},"env":{"MY_VAR":"1"}}' |
             Set-Content (Join-Path $env:CLAUDE_CONFIG_DIR 'settings.json')
 
-        Invoke-Launcher $configure @{ ApiKey = 'sk-0123456789abcdef'; SkipClaudeInstall = $true } | Out-Null
+        Invoke-Launcher $configure @{ ApiKey = $fakePaygKey; SkipClaudeInstall = $true } | Out-Null
 
         $settings = Get-Content (Join-Path $env:CLAUDE_CONFIG_DIR 'settings.json') -Raw | ConvertFrom-Json
         $settings.permissions.deny | Should -Contain 'Read(.env)'

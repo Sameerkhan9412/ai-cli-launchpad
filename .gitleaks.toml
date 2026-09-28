@@ -3,6 +3,7 @@ title = "ai-cli-launchpad gitleaks config"
 [extend]
 useDefault = true
 
-[[allowlists]]
-description = "Fake placeholder keys used by the Pester tests"
-regexes = ['''^(tp-|sk-)?0123456789abcdef$''']
+# Single [allowlist] table: the gitleaks build bundled with gitleaks-action@v2 predates [[allowlists]].
+[allowlist]
+description = "Obviously fake keys used by the Pester tests"
+regexes = ['''0123456789abcdef''', '''abcdefghijklmnop1234''']
