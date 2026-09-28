@@ -80,6 +80,35 @@ Describe 'Start-ClaudeWithMiMo.ps1 -DryRun' {
         $output | Should -Match 'ARGS\s+:\s+--print hello world'
     }
 
+    It 'reports a missing claude without offering to install during a dry run' {
+        $env:MIMO_TOKEN_PLAN_API_KEY = 'tp-0123456789abcdef'
+        $savedPath = $env:PATH
+        try {
+            $env:PATH = Join-Path $TestDrive 'empty-path'
+            $r = Invoke-Launcher $launcher @{ DryRun = $true }
+        }
+        finally { $env:PATH = $savedPath }
+        $r.ExitCode | Should -Be 0
+        $r.Output | Should -Match 'CLAUDE\s+:\s+not installed'
+        $r.Output | Should -Not -Match 'Install Claude Code now'
+    }
+
+    It 'shows where claude was found' {
+        $env:MIMO_TOKEN_PLAN_API_KEY = 'tp-0123456789abcdef'
+        $bin = Join-Path $TestDrive 'fake-bin'
+        New-Item -ItemType Directory -Path $bin -Force | Out-Null
+        $fake = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'claude.cmd' } else { 'claude' }
+        Set-Content -Path (Join-Path $bin $fake) -Value 'exit 0'
+        if ($fake -eq 'claude') { chmod +x (Join-Path $bin $fake) }
+        $savedPath = $env:PATH
+        try {
+            $env:PATH = $bin
+            $r = Invoke-Launcher $launcher @{ DryRun = $true }
+        }
+        finally { $env:PATH = $savedPath }
+        $r.Output | Should -Match ('CLAUDE\s+:\s+' + [regex]::Escape((Join-Path $bin $fake)))
+    }
+
     It 'does not create preferences.json' {
         $env:MIMO_TOKEN_PLAN_API_KEY = 'tp-0123456789abcdef'
         Invoke-Launcher $launcher @{ DryRun = $true } | Out-Null
@@ -99,7 +128,7 @@ Describe 'Configure-ClaudeWithMiMo.ps1' {
     }
 
     It 'writes settings.json, the onboarding flag and .env' {
-        $r = Invoke-Launcher $configure @{ ApiKey = 'tp-0123456789abcdef'; Model = 'pro' }
+        $r = Invoke-Launcher $configure @{ ApiKey = 'tp-0123456789abcdef'; Model = 'pro'; SkipClaudeInstall = $true }
 
         $settings = Get-Content (Join-Path $env:CLAUDE_CONFIG_DIR 'settings.json') -Raw | ConvertFrom-Json
         $settings.env.ANTHROPIC_BASE_URL | Should -Be 'https://token-plan-sgp.xiaomimimo.com/anthropic'
@@ -118,7 +147,7 @@ Describe 'Configure-ClaudeWithMiMo.ps1' {
         '{"permissions":{"deny":["Read(.env)"]},"env":{"MY_VAR":"1"}}' |
             Set-Content (Join-Path $env:CLAUDE_CONFIG_DIR 'settings.json')
 
-        Invoke-Launcher $configure @{ ApiKey = 'sk-0123456789abcdef' } | Out-Null
+        Invoke-Launcher $configure @{ ApiKey = 'sk-0123456789abcdef'; SkipClaudeInstall = $true } | Out-Null
 
         $settings = Get-Content (Join-Path $env:CLAUDE_CONFIG_DIR 'settings.json') -Raw | ConvertFrom-Json
         $settings.permissions.deny | Should -Contain 'Read(.env)'

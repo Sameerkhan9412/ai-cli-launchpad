@@ -12,7 +12,8 @@ Run Claude Code CLI on Xiaomi MiMo models (v2.6 Pro with 1M context, v2.6 Flash)
 ## 1. Prerequisites
 
 - **PowerShell** 5.1 (built into Windows 10/11) or 7+ (`winget install Microsoft.PowerShell`, or your OS package manager)
-- **Claude Code** on PATH — check with `claude --version`
+- **Claude Code**: optional up front. If `claude` is not on PATH, both scripts offer to install it
+  (official installer, or npm when Node is present) and then carry on. To install it yourself:
 
   ```powershell
   irm https://claude.ai/install.ps1 | iex          # Windows native installer
@@ -68,8 +69,22 @@ function mimo { & "C:\path\to\ai-cli-launchpad\launchers\claude-code\Start-Claud
 | `-Plan <Auto\|PayAsYouGo\|TokenPlanSgp\|TokenPlanCn\|TokenPlanAms>` | `Auto` | Force endpoint instead of key-prefix detection |
 | `-WorkingDirectory <path>` | current folder | Where Claude Code opens |
 | `-NoSettingsWrite` | off | Session env only; don't touch `~/.claude/settings.json` |
-| `-DryRun` | off | Print resolved config and exit — nothing written, `claude` not started |
+| `-DryRun` | off | Print resolved config and exit — nothing written or installed, `claude` not started |
+| `-InstallClaude` | off | If Claude Code is missing, install it (recommended method) without asking |
+| `-SkipClaudeInstall` | off | If Claude Code is missing, print install steps and exit instead of asking |
 | anything after `--` | | Passed straight to `claude` (e.g. `-- -p "summarize this repo"`) |
+
+When `claude` is missing and neither switch is set, you get a prompt:
+
+```text
+Claude Code (the `claude` command) is not installed or not on PATH.
+  [1] Official installer (recommended)       irm https://claude.ai/install.ps1 | iex
+  [2] npm global package (needs Node 18+)    npm install -g @anthropic-ai/claude-code
+  [0] No, do not install now
+Install Claude Code now? [1]:
+```
+
+Enter installs, reloads PATH and starts Claude Code in the same run. Non-interactive sessions never prompt.
 
 ### Configure-ClaudeWithMiMo.ps1
 
@@ -78,6 +93,8 @@ function mimo { & "C:\path\to\ai-cli-launchpad\launchers\claude-code\Start-Claud
 | `-Plan` | Same as above |
 | `-Model` | Main model id / alias (fast model follows the catalog) |
 | `-ApiKey` | Key on the command line (lands in shell history — prefer `.env` or the hidden prompt) |
+| `-InstallClaude` | Install Claude Code without asking if it is missing (new machine in one command) |
+| `-SkipClaudeInstall` | Skip the Claude Code check entirely |
 
 ## What gets written
 
@@ -111,7 +128,8 @@ See [docs/troubleshooting.md](https://github.com/kumarlalitss166/ai-cli-launchpa
 
 | Symptom | Fix |
 |---|---|
-| `claude not found on PATH` | Install Claude Code, open a new terminal |
+| `Claude Code ... is not installed` | Answer `1` at the prompt, or rerun with `-InstallClaude` |
+| Installed but still "not on PATH" | Open a new terminal and run the script again |
 | `running scripts is disabled` | `Unblock-File` + `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
 | `Missing MiMo API key` | `.env` must sit next to the scripts and contain `MIMO_TOKEN_PLAN_API_KEY=...` |
 | `400 token unavailable` / `401` | Key/plan mismatch or expired key — try `-DryRun` to see what was detected |

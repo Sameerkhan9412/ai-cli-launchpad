@@ -27,7 +27,9 @@ Start with a dry run — it shows what was detected without changing anything (k
 
 | Symptom | Fix |
 |---|---|
-| `claude not found on PATH` | Install Claude Code, then open a **new** terminal |
+| `Claude Code ... is not installed or not on PATH` | Answer `1` (official installer) or `2` (npm) at the prompt, or rerun with `-InstallClaude` |
+| Install finished but claude is "still not on PATH" | Open a **new** terminal and rerun; the installer may have updated PATH only for new shells |
+| Claude Code on Windows asks for Git Bash | Install [Git for Windows](https://git-scm.com/download/win), open a new terminal |
 | Anthropic login menu (subscription / Console / Bedrock) | Ctrl+C. Run `Configure-ClaudeWithMiMo.ps1`, open a new terminal |
 | `/status` shows an Anthropic URL | An old terminal kept old env. Close all terminals; relaunch |
 | `400 token unavailable` | Key/URL mismatch or Token Plan quota used up. Check the dry run and your MiMo console |

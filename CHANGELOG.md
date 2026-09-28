@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-28
+
+### Added
+- Both scripts check that Claude Code is installed. If `claude` is missing they offer to install it
+  (official installer, or npm when Node is present), reload PATH and continue in the same run.
+- `-InstallClaude` (install without asking) and `-SkipClaudeInstall` (never offer) switches.
+- `CLAUDE` line in the launcher banner shows where `claude` was found.
+
 ## [0.1.0] - 2026-09-28
 
 ### Added
@@ -22,5 +30,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 - `~/.claude.json` is edited as text to add only `hasCompletedOnboarding`, preserving project trust and MCP servers.
 - Keys are masked in all console output.
 
-[Unreleased]: https://github.com/kumarlalitss166/ai-cli-launchpad/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kumarlalitss166/ai-cli-launchpad/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/kumarlalitss166/ai-cli-launchpad/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kumarlalitss166/ai-cli-launchpad/releases/tag/v0.1.0

@@ -10,6 +10,7 @@
 
   Key lookup: -ApiKey > env MIMO_TOKEN_PLAN_API_KEY > .env > env/.env MIMO_API_KEY > hidden prompt.
   A key passed with -ApiKey or typed at the prompt is saved to .env for Start-ClaudeWithMiMo.ps1.
+  Finally checks that Claude Code is installed and offers to install it if it is missing.
 
 .PARAMETER ApiKey
   MiMo key (tp-... Token Plan or sk-... pay-as-you-go). Prefer .env over typing it here
@@ -21,18 +22,29 @@
 .PARAMETER Model
   Main model id or alias. Default: mimo-v2.6-pro[1m] (fast slot: mimo-v2.6-flash).
 
+.PARAMETER InstallClaude
+  If Claude Code is missing, install it with the recommended method without asking.
+
+.PARAMETER SkipClaudeInstall
+  Do not check for or offer to install Claude Code.
+
 .EXAMPLE
   .\Configure-ClaudeWithMiMo.ps1
 
 .EXAMPLE
   .\Configure-ClaudeWithMiMo.ps1 -Plan TokenPlanAms -Model flash
+
+.EXAMPLE
+  .\Configure-ClaudeWithMiMo.ps1 -InstallClaude      # new machine: configure and install in one go
 #>
 [CmdletBinding()]
 param(
     [string]$ApiKey,
     [ValidateSet('Auto', 'PayAsYouGo', 'TokenPlanSgp', 'TokenPlanCn', 'TokenPlanAms')]
     [string]$Plan = 'Auto',
-    [string]$Model
+    [string]$Model,
+    [switch]$InstallClaude,
+    [switch]$SkipClaudeInstall
 )
 
 $ErrorActionPreference = 'Stop'
@@ -102,6 +114,17 @@ Write-Host (' Settings    : {0}' -f $loc.SettingsFile)
 if ($backup) { Write-Host (' Backup      : {0}' -f $backup) -ForegroundColor DarkGray }
 Write-Host (' Onboarding  : {0} ({1})' -f $loc.OnboardingFile, $onboarding)
 if ($savedToEnv) { Write-Host (' .env        : key saved to {0}' -f $EnvFile) }
+
+if (-not $SkipClaudeInstall) {
+    if (Confirm-ClaudeCodeInstalled -AutoInstall:$InstallClaude) {
+        Write-Host (' Claude Code : {0}' -f (Get-ClaudeCodeCommand).Source)
+    }
+    else {
+        Write-Host ''
+        Write-Host 'MiMo settings are saved; they apply as soon as Claude Code is installed.' -ForegroundColor Yellow
+    }
+}
+
 Write-Host ''
 Write-Host 'Close any running Claude Code, open a NEW terminal, then:'
 Write-Host ''

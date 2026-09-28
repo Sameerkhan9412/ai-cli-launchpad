@@ -79,7 +79,7 @@ launchers/claude-code/
   lib/Common.ps1                 .env, BOM-free writes, safe Claude config merge
   lib/MiMo.ps1                   endpoints, key detection, model catalog, env
   lib/ModelSelector.ps1          reusable model menu + saved defaults
-tests/                           Pester 5 tests (89) — run on Windows PowerShell, pwsh, Linux in CI
+tests/                           Pester 5 tests (107) — run on Windows PowerShell, pwsh, Linux in CI
 docs/                            architecture, troubleshooting
 ```
 

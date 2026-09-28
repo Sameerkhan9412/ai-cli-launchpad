@@ -241,3 +241,199 @@ function Set-ClaudeOnboardingComplete {
     }
     return 'updated'
 }
+
+function Test-IsWindowsHost {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param()
+    # $IsWindows does not exist on Windows PowerShell 5.1.
+    return ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT)
+}
+
+function Test-InteractiveSession {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param()
+    if (-not [Environment]::UserInteractive) { return $false }
+    if ([Environment]::GetCommandLineArgs() | Where-Object { $_ -match '^-NonI' }) { return $false }
+    try { return (-not [Console]::IsInputRedirected) } catch { return $true }
+}
+
+function Get-ClaudeCodeCommand {
+    [CmdletBinding()]
+    param()
+    Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+
+function Update-SessionPath {
+    <#
+    .SYNOPSIS
+      Reload PATH so a CLI installed a moment ago (or in another terminal) is found without reopening the shell.
+    #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Only changes PATH of the current session')]
+    [CmdletBinding()]
+    param([string[]]$ExtraDirectory)
+
+    if (-not $PSBoundParameters.ContainsKey('ExtraDirectory')) {
+        $ExtraDirectory = @([System.IO.Path]::Combine($HOME, '.local', 'bin'))
+        if ($env:APPDATA) { $ExtraDirectory += [System.IO.Path]::Combine($env:APPDATA, 'npm') }
+    }
+
+    $sources = @($env:PATH)
+    if (Test-IsWindowsHost) {
+        $sources += [Environment]::GetEnvironmentVariable('Path', 'Machine')
+        $sources += [Environment]::GetEnvironmentVariable('Path', 'User')
+    }
+    $sources += @($ExtraDirectory | Where-Object { $_ -and (Test-Path -LiteralPath $_) })
+
+    $sep = [System.IO.Path]::PathSeparator
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    $parts = New-Object System.Collections.Generic.List[string]
+    foreach ($source in $sources) {
+        foreach ($entry in ("$source" -split [regex]::Escape($sep))) {
+            if ($entry -and $seen.Add($entry.TrimEnd('\', '/'))) { $parts.Add($entry) }
+        }
+    }
+    $env:PATH = $parts -join $sep
+}
+
+function Get-ClaudeInstallOption {
+    <#
+    .SYNOPSIS
+      Ways to install Claude Code on this machine, recommended first.
+    #>
+    [CmdletBinding()]
+    param(
+        [bool]$OnWindows = (Test-IsWindowsHost),
+        [bool]$HasNpm = [bool](Get-Command npm -CommandType Application -ErrorAction SilentlyContinue)
+    )
+    if ($OnWindows) {
+        [pscustomobject]@{ Id = 'native-windows'; Label = 'Official installer (recommended)'; Command = 'irm https://claude.ai/install.ps1 | iex' }
+    }
+    else {
+        [pscustomobject]@{ Id = 'native-unix'; Label = 'Official installer (recommended)'; Command = 'curl -fsSL https://claude.ai/install.sh | bash' }
+    }
+    if ($HasNpm) {
+        [pscustomobject]@{ Id = 'npm'; Label = 'npm global package (needs Node 18+)'; Command = 'npm install -g @anthropic-ai/claude-code' }
+    }
+}
+
+function Show-ClaudeInstallHelp {
+    [CmdletBinding()]
+    param([object[]]$Option = @(Get-ClaudeInstallOption))
+    Write-Host 'Install Claude Code with one of these, open a NEW terminal, then run this script again:'
+    foreach ($o in $Option) { Write-Host ('  {0}' -f $o.Command) }
+    Write-Host '  Docs: https://docs.anthropic.com/en/docs/claude-code/setup'
+}
+
+function Install-ClaudeCode {
+    <#
+    .SYNOPSIS
+      Run one install option, reload PATH, and report whether `claude` is now callable.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([bool])]
+    param([Parameter(Mandatory)][object]$Option)
+
+    if (-not $PSCmdlet.ShouldProcess('Claude Code', $Option.Command)) { return $false }
+    Write-Host ''
+    Write-Host ("Installing Claude Code: {0}" -f $Option.Command) -ForegroundColor Cyan
+
+    $code = 0
+    try {
+        switch ($Option.Id) {
+            'native-windows' {
+                $shell = (Get-Process -Id $PID).Path
+                if (-not $shell -or $shell -notmatch '(powershell|pwsh)(\.exe)?$') { $shell = 'powershell' }
+                # Child process: the official script runs isolated and TLS 1.2 is forced for Windows PowerShell 5.1.
+                $script = '[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12; irm https://claude.ai/install.ps1 | iex'
+                & $shell -NoProfile -ExecutionPolicy Bypass -Command $script
+                $code = $LASTEXITCODE
+            }
+            'native-unix' {
+                & bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
+                $code = $LASTEXITCODE
+            }
+            'npm' {
+                $npm = Get-Command npm -CommandType Application -ErrorAction Stop | Select-Object -First 1
+                & $npm.Source install -g '@anthropic-ai/claude-code'
+                $code = $LASTEXITCODE
+            }
+            default { throw "Unknown install option '$($Option.Id)'." }
+        }
+    }
+    catch {
+        Write-Warning "Claude Code install failed: $($_.Exception.Message)"
+        return $false
+    }
+    if ($code -and $code -ne 0) { Write-Warning "Installer exited with code $code." }
+
+    Update-SessionPath
+    return [bool](Get-ClaudeCodeCommand)
+}
+
+function Confirm-ClaudeCodeInstalled {
+    <#
+    .SYNOPSIS
+      Make sure `claude` is callable; if it is missing, offer to install it and carry on.
+    .DESCRIPTION
+      Returns $true when claude is (now) available. Asks before installing unless -AutoInstall.
+      Never prompts in a non-interactive session or with -NeverInstall; prints manual steps instead.
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [switch]$AutoInstall,
+        [switch]$NeverInstall
+    )
+
+    if (Get-ClaudeCodeCommand) { return $true }
+    Update-SessionPath
+    if (Get-ClaudeCodeCommand) { return $true }
+
+    $options = @(Get-ClaudeInstallOption)
+    Write-Host ''
+    Write-Host 'Claude Code (the `claude` command) is not installed or not on PATH.' -ForegroundColor Yellow
+
+    if ($NeverInstall -or (-not $AutoInstall -and -not (Test-InteractiveSession))) {
+        Show-ClaudeInstallHelp -Option $options
+        return $false
+    }
+
+    $choice = $options[0]
+    if (-not $AutoInstall) {
+        for ($i = 0; $i -lt $options.Count; $i++) {
+            Write-Host ('  [{0}] {1,-38} {2}' -f ($i + 1), $options[$i].Label, $options[$i].Command)
+        }
+        Write-Host '  [0] No, do not install now'
+
+        $picked = $null
+        for ($try = 0; $try -lt 3 -and $null -eq $picked; $try++) {
+            $answer = "$(Read-Host 'Install Claude Code now? [1]')".Trim().ToLowerInvariant()
+            if ($answer -in @('', 'y', 'yes')) { $answer = '1' }
+            if ($answer -in @('n', 'no', 'q')) { $answer = '0' }
+            $n = 0
+            if ([int]::TryParse($answer, [ref]$n) -and $n -ge 0 -and $n -le $options.Count) { $picked = $n }
+            else { Write-Host ("Enter a number from 0 to {0}." -f $options.Count) -ForegroundColor Yellow }
+        }
+        if (-not $picked) {
+            Write-Host 'Not installing Claude Code.' -ForegroundColor Yellow
+            Show-ClaudeInstallHelp -Option $options
+            return $false
+        }
+        $choice = $options[$picked - 1]
+    }
+
+    if (Install-ClaudeCode -Option $choice) {
+        Write-Host ("Claude Code ready: {0}" -f (Get-ClaudeCodeCommand).Source) -ForegroundColor Green
+        if ((Test-IsWindowsHost) -and -not (Get-Command git -ErrorAction SilentlyContinue)) {
+            Write-Host 'Note: Claude Code on Windows expects Git for Windows (https://git-scm.com/download/win).' -ForegroundColor Yellow
+        }
+        return $true
+    }
+
+    Write-Host ''
+    Write-Host 'Claude Code is still not on PATH (the install failed or needs a new terminal).' -ForegroundColor Red
+    Show-ClaudeInstallHelp -Option $options
+    return $false
+}

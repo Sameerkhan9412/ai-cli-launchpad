@@ -8,7 +8,8 @@
   2. Picks the Anthropic-compatible Base URL from the key prefix (tp-/ttp- Token Plan, sk- pay-as-you-go)
      and refuses key/URL combinations that can only fail with 400/401.
   3. Model menu on first run; the choice is saved in preferences.json (Enter reuses it later).
-  4. Sets the env for this session, merges the same values into ~/.claude/settings.json
+  4. Checks that Claude Code is installed; if not, asks whether to install it and carries on.
+  5. Sets the env for this session, merges the same values into ~/.claude/settings.json
      (so plain `claude` also uses MiMo), then starts `claude` in -WorkingDirectory.
 
 .PARAMETER Model
@@ -27,7 +28,13 @@
   Only set env vars for this session; leave ~/.claude/settings.json untouched.
 
 .PARAMETER DryRun
-  Resolve and print the configuration. Writes nothing and does not start claude.
+  Resolve and print the configuration. Writes nothing, installs nothing and does not start claude.
+
+.PARAMETER InstallClaude
+  If Claude Code is missing, install it with the recommended method without asking.
+
+.PARAMETER SkipClaudeInstall
+  If Claude Code is missing, print install steps and exit instead of offering to install.
 
 .EXAMPLE
   .\Start-ClaudeWithMiMo.ps1
@@ -50,6 +57,8 @@ param(
     [string]$WorkingDirectory = (Get-Location).Path,
     [switch]$NoSettingsWrite,
     [switch]$DryRun,
+    [switch]$InstallClaude,
+    [switch]$SkipClaudeInstall,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$ClaudeArgs
 )
@@ -107,6 +116,7 @@ if (-not $resolved) {
 $claudeEnv = Get-MiMoClaudeEnv -ApiKey $apiKey -BaseUrl $planInfo.BaseUrl `
     -MainModel $resolved.Model -FastModel $resolved.FastModel
 $writeSettings = -not ($DryRun -or $NoSettingsWrite -or $isSubcommand)
+$claudeCmd = Get-ClaudeCodeCommand
 
 Write-Host ("Claude Code -> Xiaomi MiMo ({0})" -f (Get-MiMoPlanLabel -PlanId $planInfo.PlanId)) -ForegroundColor Cyan
 Write-Host "  DETECT   : $($planInfo.Reason)" -ForegroundColor DarkGray
@@ -117,6 +127,7 @@ Write-Host "  FAST     : $($resolved.FastModel)  (haiku + subagent slots)"
 Write-Host "  CWD      : $WorkingDirectory"
 if ($ClaudeArgs) { Write-Host "  ARGS     : $($ClaudeArgs -join ' ')" }
 Write-Host ("  SETTINGS : {0}" -f $(if ($writeSettings) { 'merge into ~/.claude/settings.json' } else { 'session env only' }))
+Write-Host ("  CLAUDE   : {0}" -f $(if ($claudeCmd) { $claudeCmd.Source } else { 'not installed (will offer to install)' }))
 
 if ($DryRun) {
     Write-Host ''
@@ -124,10 +135,9 @@ if ($DryRun) {
     exit 0
 }
 
-if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+if (-not (Confirm-ClaudeCodeInstalled -AutoInstall:$InstallClaude -NeverInstall:$SkipClaudeInstall)) {
     Write-Host ''
-    Write-Host 'claude not found on PATH. Install Claude Code first:' -ForegroundColor Red
-    Write-Host '  irm https://claude.ai/install.ps1 | iex      # or: npm install -g @anthropic-ai/claude-code'
+    Write-Host 'claude not started. Nothing was written.' -ForegroundColor Yellow
     exit 1
 }
 
